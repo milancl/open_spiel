@@ -386,6 +386,51 @@ std::string BridgeState::FormatResult() const {
   return rv;
 }
 
+std::vector<double> BridgeState::CustomObservationTensor() const {
+  SPIEL_CHECK_TRUE(phase_ == Phase::kPlay);
+  std::vector<double> values(CustomObservationTensorSize());
+  if (values.size() == 0) {
+    return values;  // No custom observation tensor if no history.
+  }
+  // Write the custom observation tensor for the current player
+  WriteCustomObservationTensor(CurrentPlayer(), values);
+  return values;
+}
+
+void BridgeState::WriteCustomObservationTensor(Player player, std::vector<double>& values) const {
+  SPIEL_CHECK_GE(player, 0);
+  SPIEL_CHECK_LT(player, num_players_);
+
+  std::fill(values.begin(), values.end(), 0.0);
+
+  // Start setting up the values of the custom observation tensor.
+  auto ptr = values.begin();
+  ptr[0] = 3.14159;  // Just an example value, replace with actual data.
+}
+
+
+std::vector<double> BridgeState::CustomBiddingTensor() const {
+  SPIEL_CHECK_TRUE(phase_ != Phase::kDeal);
+  std::vector<double> values(CustomBiddingTensorSize());
+  if (values.size() == 0) {
+    return values;  // No custom bidding tensor if no history.
+  }
+  WriteCustomBiddingTensor(CurrentPlayer(), values);
+  return values;
+}
+
+void BridgeState::WriteCustomBiddingTensor(Player player, std::vector<double>& values) const {
+  SPIEL_CHECK_GE(player, 0);
+  SPIEL_CHECK_LT(player, num_players_);
+
+  std::fill(values.begin(), values.end(), 0.0);
+
+  // Start setting up the values of the custom bidding tensor.
+  auto ptr = values.begin();
+  ptr[0] = 2 * 3.14159;  // Just an example value, replace with actual data.
+}
+
+
 void BridgeState::ObservationTensor(Player player,
                                     absl::Span<float> values) const {
   SPIEL_CHECK_EQ(values.size(), game_->ObservationTensorSize());

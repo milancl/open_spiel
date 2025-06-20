@@ -75,6 +75,7 @@ inline constexpr int kPublicInfoTensorSize =
     + kNumPlayers;      // Plus trailing passes
 inline constexpr int kMaxAuctionLength =
     kNumBids * (1 + kNumPlayers * 2) + kNumPlayers;
+inline constexpr int kCustomObservationTensorSize = 100;
 enum class Suit { kClubs = 0, kDiamonds = 1, kHearts = 2, kSpades = 3 };
 
 // State of a single trick.
@@ -112,6 +113,18 @@ class BridgeState : public State {
   void WriteObservationTensor(Player player, absl::Span<float> values) const;
   void ObservationTensor(Player player,
                          absl::Span<float> values) const override;
+
+  // Writes a custom observation tensor for the player.
+  // This is used for custom neural network architectures.
+  std::vector<double> CustomObservationTensor() const;
+  void WriteCustomObservationTensor(Player player, std::vector<double>& values) const;
+  int CustomObservationTensorSize() const { return kCustomObservationTensorSize; };
+
+  std::vector<double> CustomBiddingTensor() const;
+  void WriteCustomBiddingTensor(Player player, std::vector<double>& values) const;
+  int CustomBiddingTensorSize() const { return std::max(0, (int)history_.size() - kNumCards - num_cards_played_); };
+
+
   void InformationStateTensor(Player player,
                          absl::Span<float> values) const override;
   std::unique_ptr<State> Clone() const override {
@@ -240,7 +253,11 @@ class BridgeGame : public Game {
             std::max(GetPlayTensorSize(NumTricks()), kAuctionTensorSize)};
   }
 
-    std::vector<int> InformationStateTensorShape() const override {
+  std::vector<int> CustomObservationTensorShape() const {
+    return {kCustomObservationTensorSize};
+  }
+
+  std::vector<int> InformationStateTensorShape() const override {
     return {kNumObservationTypes +
             std::max(GetPlayTensorSize(NumTricks()), kAuctionTensorSize)};
   }
