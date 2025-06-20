@@ -84,6 +84,8 @@ const GameType kGameType{/*short_name=*/"bridge",
                              {"non_dealer_vul", GameParameter(false)},
                              // Number of played tricks in observation tensor
                              {"num_tricks", GameParameter(2)},
+                             // Who is the dealer
+                             {"dealer", GameParameter(0)},
                          }};
 
 std::shared_ptr<const Game> Factory(const GameParameters& params) {
@@ -147,11 +149,12 @@ BridgeGame::BridgeGame(const GameParameters& params)
 BridgeState::BridgeState(std::shared_ptr<const Game> game,
                          bool use_double_dummy_result,
                          bool is_dealer_vulnerable,
-                         bool is_non_dealer_vulnerable, int num_tricks)
+                         bool is_non_dealer_vulnerable, int num_tricks, Player dealer)
     : State(game),
       use_double_dummy_result_(use_double_dummy_result),
       is_vulnerable_{is_dealer_vulnerable, is_non_dealer_vulnerable},
-      num_tricks_(num_tricks) {
+      num_tricks_(num_tricks),
+      dealer_(Player(dealer)) {
   possible_contracts_.fill(true);
 }
 
@@ -424,7 +427,7 @@ void BridgeState::WriteObservationTensor(Player player,
     *ptr++ = contract_.double_status == DoubleStatus::kRedoubled;
 
     // Identity of the declarer.
-    ptr[(contract_.declarer + kNumPlayers - player) % kNumPlayers] = 1;
+    ptr[(contract_.declarer + kNumPlayers - player) % kNumPlayers] = 1; // TODO: why? couldn't it be just contract_.declarer?
     ptr += kNumPlayers;
 
     // Vulnerability.
@@ -437,7 +440,7 @@ void BridgeState::WriteObservationTensor(Player player,
     ptr += kNumCards;
 
     // Dummy's remaining cards.
-    const int dummy = Partner(contract_.declarer);
+    const int dummy = Partner(contract_.declarer); // confirmation that the dummy is stored in the observation. Is it stored also when leading?
     for (int i = 0; i < kNumCards; ++i)
       if (holder_[i] == dummy) ptr[i] = 1;
     ptr += kNumCards;
@@ -523,6 +526,7 @@ void BridgeState::WriteObservationTensor(Player player,
   }
 }
 
+// only called in auction phase
 std::vector<double> BridgeState::PublicObservationTensor() const {
   SPIEL_CHECK_TRUE(phase_ == Phase::kAuction);
   std::vector<double> rv(kPublicInfoTensorSize);
@@ -558,6 +562,7 @@ std::vector<double> BridgeState::PublicObservationTensor() const {
   return rv;
 }
 
+// hand tensor for the player
 std::vector<double> BridgeState::PrivateObservationTensor(Player player) const {
   std::vector<double> rv(kNumCards);
   for (int i = 0; i < kNumCards; ++i)
@@ -810,7 +815,7 @@ void BridgeState::ApplyDealAction(int card) {
   if (history_.size() == kNumCards - 1) {
     if (use_double_dummy_result_) ComputeDoubleDummyTricks();
     phase_ = Phase::kAuction;
-    current_player_ = kFirstPlayer;
+    current_player_ = dealer_;
   }
 }
 
@@ -1009,7 +1014,7 @@ std::unique_ptr<State> BridgeGame::DeserializeState(
   if (!UseDoubleDummyResult()) return Game::DeserializeState(str);
   auto state = std::make_unique<BridgeState>(
       shared_from_this(), UseDoubleDummyResult(), IsDealerVulnerable(),
-      IsNonDealerVulnerable(), NumTricks());
+      IsNonDealerVulnerable(), NumTricks(), Dealer());
   std::vector<std::string> lines = absl::StrSplit(str, '\n');
   const auto separator = absl::c_find(lines, "Double Dummy Results");
   // Double-dummy results.
