@@ -116,14 +116,25 @@ class BridgeState : public State {
 
   // Writes a custom observation tensor for the player.
   // This is used for custom neural network architectures.
-  std::vector<double> CustomObservationTensor() const;
-  void WriteCustomObservationTensor(Player player, std::vector<double>& values) const;
-  int CustomObservationTensorSize() const { return kCustomObservationTensorSize; };
+  std::map<std::string, std::vector<int> > CustomObservationDict() const;
+  void WriteCustomObservationDict(Player player, std::map<std::string, std::vector<int> >& inputs) const;
 
-  std::vector<double> CustomBiddingTensor() const;
-  void WriteCustomBiddingTensor(Player player, std::vector<double>& values) const;
-  int CustomBiddingTensorSize() const { return std::max(0, (int)history_.size() - kNumCards - num_cards_played_); };
+  std::vector<int> BiddingTensor() const;
+  void WriteBiddingTensor(std::vector<int>& values) const;
+  int NumberOfBids() const { return std::max(0, (int)history_.size() - kNumCards - num_cards_played_); };
 
+  std::vector<int> BiddingOwnersTensor() const;
+  void WriteBiddingOwnersTensor(std::vector<int>& values) const;
+
+  std::vector<int> PlayedCardsTensor() const;
+  void WritePlayedCardsTensor(std::vector<int>& values) const;
+  int NumberOfPlayedCards() const { return num_cards_played_; };
+
+  std::vector<int> PlayedCardsOwnersTensor() const;
+  void WritePlayedCardsOwnersTensor(std::vector<int>& values) const;
+
+  std::vector<int> HandTensor(Player player) const;
+  
 
   void InformationStateTensor(Player player,
                          absl::Span<float> values) const override;
@@ -195,6 +206,13 @@ class BridgeState : public State {
   std::string FormatPlay() const;
   std::string FormatPlayObservation(bool trailing_query) const;
   std::string FormatResult() const;
+  Player Dummy() const {
+    SPIEL_CHECK_TRUE(phase_ == Phase::kPlay || phase_ == Phase::kGameOver);
+    return (contract_.declarer + 2) % kNumPlayers;
+  }
+  Player IsDummyOpen() const {
+    return phase_ == Phase::kPlay && num_cards_played_ > 0;
+  }
 
   const bool use_double_dummy_result_;
   const bool is_vulnerable_[kNumPartnerships];
@@ -213,6 +231,7 @@ class BridgeState : public State {
   std::array<Trick, kNumTricks> tricks_{};
   std::vector<double> returns_ = std::vector<double>(kNumPlayers);
   std::array<absl::optional<Player>, kNumCards> holder_{};
+  std::vector<int> owner_ = std::vector<int>(kNumCards);
   mutable absl::optional<ddTableResults> double_dummy_results_{};
   std::array<bool, kNumContracts> possible_contracts_;
   mutable std::array<int, kNumContracts> score_by_contract_;

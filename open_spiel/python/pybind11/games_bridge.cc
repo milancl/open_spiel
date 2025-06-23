@@ -48,10 +48,10 @@ void init_pyspiel_games_bridge(py::module& m) {
       .def("public_observation_tensor", &BridgeState::PublicObservationTensor)
 
       // Custom methods for bridge-ai
-      .def("custom_observation_tensor_size", &BridgeState::CustomObservationTensorSize)
-      .def("custom_observation_tensor", &BridgeState::CustomObservationTensor)
-      .def("custom_bidding_tensor_size", &BridgeState::CustomBiddingTensorSize)
-      .def("custom_bidding_tensor", &BridgeState::CustomBiddingTensor)
+      .def("custom_observation_dict", &BridgeState::CustomObservationDict)
+      .def("bidding_tensor_size", &BridgeState::NumberOfBids)
+      .def("bidding_tensor", &BridgeState::BiddingTensor)
+      .def("bidding_owners_tensor", &BridgeState::BiddingOwnersTensor)
 
       // Pickle support
       .def(py::pickle(

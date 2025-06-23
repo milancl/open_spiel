@@ -300,15 +300,19 @@ std::string BridgeState::FormatVulnerability() const {
 
 std::string BridgeState::FormatAuction(bool trailing_query) const {
   SPIEL_CHECK_GT(history_.size(), kNumCards);
-  std::string rv = "\nWest  North East  South\n      ";
+  std::string rv = "\nNorth East  South West  \n";
+  // add spaces for the players before the dealer
+  for (int i = 0; i < dealer_; ++i) {
+    absl::StrAppend(&rv, std::string(6, ' '));
+  }
   for (int i = kNumCards; i < history_.size() - num_cards_played_; ++i) {
-    if (i % kNumPlayers == kNumPlayers - 1) rv.push_back('\n');
+    if ((dealer_ + i) % kNumPlayers == 0) rv.push_back('\n');
     absl::StrAppend(
         &rv, absl::StrFormat(
                  "%-6s", BidString(history_[i].action - kBiddingActionBase)));
   }
   if (trailing_query) {
-    if ((history_.size() - num_cards_played_) % kNumPlayers == kNumPlayers - 1)
+    if ((history_.size() - num_cards_played_) % kNumPlayers == 0)
       rv.push_back('\n');
     rv.push_back('?');
   }
@@ -386,48 +390,111 @@ std::string BridgeState::FormatResult() const {
   return rv;
 }
 
-std::vector<double> BridgeState::CustomObservationTensor() const {
+std::map<std::string, std::vector<int> > BridgeState::CustomObservationDict() const {
   SPIEL_CHECK_TRUE(phase_ == Phase::kPlay);
-  std::vector<double> values(CustomObservationTensorSize());
-  if (values.size() == 0) {
-    return values;  // No custom observation tensor if no history.
-  }
+  std::map<std::string, std::vector<int> > inputs;
   // Write the custom observation tensor for the current player
-  WriteCustomObservationTensor(CurrentPlayer(), values);
-  return values;
+  WriteCustomObservationDict(CurrentPlayer(), inputs);
+  return inputs;
 }
 
-void BridgeState::WriteCustomObservationTensor(Player player, std::vector<double>& values) const {
+void BridgeState::WriteCustomObservationDict(Player player, std::map<std::string, std::vector<int> >& inputs) const {
   SPIEL_CHECK_GE(player, 0);
   SPIEL_CHECK_LT(player, num_players_);
-
-  std::fill(values.begin(), values.end(), 0.0);
+  SPIEL_CHECK_TRUE(phase_ == Phase::kPlay);
 
   // Start setting up the values of the custom observation tensor.
-  auto ptr = values.begin();
-  ptr[0] = 3.14159;  // Just an example value, replace with actual data.
+  inputs["player"] = {player};
+  inputs["is_playing_for_dummy"] = {current_player_ == Dummy() ? 1 : 0};
+  inputs["bidding"] = BiddingTensor();
+  inputs["bidding_owners"] = BiddingOwnersTensor();
+  inputs["played_cards"] = PlayedCardsTensor();
+  inputs["played_cards_owners"] = PlayedCardsOwnersTensor();
+  
+  auto legal_actions = PlayLegalActions();
+  std::vector<int> legal_actions_tensor(legal_actions.size());
+  for (int i = 0; i < legal_actions.size(); ++i) {
+    legal_actions_tensor[i] = legal_actions[i];
+  }
+  inputs["legal_actions"] = legal_actions_tensor;
+  inputs["hand"] = HandTensor(player);
+  inputs["dummy_hand"] = IsDummyOpen() ? HandTensor(Dummy()) : std::vector<int>();
 }
 
-
-std::vector<double> BridgeState::CustomBiddingTensor() const {
+std::vector<int> BridgeState::HandTensor(Player player) const {
   SPIEL_CHECK_TRUE(phase_ != Phase::kDeal);
-  std::vector<double> values(CustomBiddingTensorSize());
-  if (values.size() == 0) {
-    return values;  // No custom bidding tensor if no history.
-  }
-  WriteCustomBiddingTensor(CurrentPlayer(), values);
+  std::vector<int> values;
+  for (int i = 0; i < kNumCards; ++i)
+    if (holder_[i] == player) 
+      values.push_back(i);
+  
   return values;
 }
 
-void BridgeState::WriteCustomBiddingTensor(Player player, std::vector<double>& values) const {
-  SPIEL_CHECK_GE(player, 0);
-  SPIEL_CHECK_LT(player, num_players_);
+std::vector<int> BridgeState::BiddingTensor() const {
+  SPIEL_CHECK_TRUE(phase_ != Phase::kDeal);
+  std::vector<int> values(NumberOfBids());
+  WriteBiddingTensor(values);
+  return values;
+}
 
-  std::fill(values.begin(), values.end(), 0.0);
-
+void BridgeState::WriteBiddingTensor(std::vector<int>& values) const {
   // Start setting up the values of the custom bidding tensor.
   auto ptr = values.begin();
-  ptr[0] = 2 * 3.14159;  // Just an example value, replace with actual data.
+  for (int i = 0; i < NumberOfBids(); ++i) {
+    // Store the bid in the custom bidding tensor.
+    ptr[i] = history_[i+kNumCards].action - kBiddingActionBase;
+  }
+}
+
+std::vector<int> BridgeState::BiddingOwnersTensor() const {
+  SPIEL_CHECK_TRUE(phase_ != Phase::kDeal);
+  std::vector<int> values(NumberOfBids());
+  WriteBiddingOwnersTensor(values);
+  return values;
+}
+
+void BridgeState::WriteBiddingOwnersTensor(std::vector<int>& values) const {
+  // Start setting up the values of the custom bidding tensor.
+  auto ptr = values.begin();
+  for (int i = 0; i < NumberOfBids(); ++i) {
+    // Store the bid in the custom bidding tensor.
+    ptr[i] = (dealer_ + i) % kNumPlayers;
+  }
+}
+
+std::vector<int> BridgeState::PlayedCardsTensor() const {
+  SPIEL_CHECK_TRUE(phase_ == Phase::kPlay || phase_ == Phase::kGameOver);
+  std::vector<int> values(NumberOfPlayedCards());
+  WritePlayedCardsTensor(values);
+  return values;
+}
+
+void BridgeState::WritePlayedCardsTensor(std::vector<int>& values) const {
+  // Start setting up the values of the custom bidding tensor.
+  auto ptr = values.begin();
+  int num_bids = NumberOfBids();
+  for (int i = 0; i < NumberOfPlayedCards(); ++i) {
+    // Store the bid in the custom bidding tensor.
+    ptr[i] = history_[i+kNumCards+num_bids].action;
+  }
+}
+
+std::vector<int> BridgeState::PlayedCardsOwnersTensor() const {
+  SPIEL_CHECK_TRUE(phase_ == Phase::kPlay || phase_ == Phase::kGameOver);
+  std::vector<int> values(NumberOfPlayedCards());
+  WritePlayedCardsOwnersTensor(values);
+  return values;
+}
+
+void BridgeState::WritePlayedCardsOwnersTensor(std::vector<int>& values) const {
+  // Start setting up the values of the custom bidding tensor.
+  auto ptr = values.begin();
+  int num_bids = NumberOfBids();
+  for (int i = 0; i < NumberOfPlayedCards(); ++i) {
+    // Store the bid in the custom bidding tensor.
+    ptr[i] = owner_[history_[i+kNumCards+num_bids].action];
+  }
 }
 
 
@@ -857,6 +924,7 @@ void BridgeState::DoApplyAction(Action action) {
 
 void BridgeState::ApplyDealAction(int card) {
   holder_[card] = (history_.size() % kNumPlayers);
+  owner_[card] = (history_.size() % kNumPlayers);
   if (history_.size() == kNumCards - 1) {
     if (use_double_dummy_result_) ComputeDoubleDummyTricks();
     phase_ = Phase::kAuction;
