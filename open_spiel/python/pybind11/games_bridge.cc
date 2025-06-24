@@ -52,6 +52,7 @@ void init_pyspiel_games_bridge(py::module& m) {
       .def("bidding_tensor_size", &BridgeState::NumberOfBids)
       .def("bidding_tensor", &BridgeState::BiddingTensor)
       .def("bidding_owners_tensor", &BridgeState::BiddingOwnersTensor)
+      .def("hand_tensor", &BridgeState::HandTensor)
 
       // Pickle support
       .def(py::pickle(
