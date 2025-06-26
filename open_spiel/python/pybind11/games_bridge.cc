@@ -80,6 +80,7 @@ void init_pyspiel_games_bridge(py::module& m) {
           [](const std::string& data) {  // __setstate__
             return std::dynamic_pointer_cast<BridgeGame>(
                 std::const_pointer_cast<Game>(LoadGame(data)));
-          }));
+          }))
+      .def("get_constants", &BridgeGame::GetConstants);
 }
 }  // namespace open_spiel

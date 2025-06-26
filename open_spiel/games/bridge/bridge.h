@@ -75,7 +75,6 @@ inline constexpr int kPublicInfoTensorSize =
     + kNumPlayers;      // Plus trailing passes
 inline constexpr int kMaxAuctionLength =
     kNumBids * (1 + kNumPlayers * 2) + kNumPlayers;
-inline constexpr int kCustomObservationTensorSize = 100;
 enum class Suit { kClubs = 0, kDiamonds = 1, kHearts = 2, kSpades = 3 };
 
 // State of a single trick.
@@ -254,6 +253,14 @@ class BridgeGame : public Game {
   double MaxUtility() const override { return kMaxScore; }
   absl::optional<double> UtilitySum() const override { return 0; }
 
+  std::map<std::string, int> GetConstants() {
+    return {
+        {"NUM_CARDS", kNumCards},
+        {"NUM_PLAYERS", kNumPlayers},
+        {"BIDDING_ACTION_BASE", kBiddingActionBase},
+    };
+  }
+
   static int GetPlayTensorSize(int num_tricks) {
     return kNumBidLevels          // What the contract is
            + kNumDenominations    // What trumps are
@@ -270,10 +277,6 @@ class BridgeGame : public Game {
   std::vector<int> ObservationTensorShape() const override {
     return {kNumObservationTypes +
             std::max(GetPlayTensorSize(NumTricks()), kAuctionTensorSize)};
-  }
-
-  std::vector<int> CustomObservationTensorShape() const {
-    return {kCustomObservationTensorSize};
   }
 
   std::vector<int> InformationStateTensorShape() const override {
